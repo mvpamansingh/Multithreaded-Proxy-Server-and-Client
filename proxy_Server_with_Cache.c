@@ -7,6 +7,20 @@
 #include <string.h>
 #include<time.h>
 #include <pthread.h>
+#include <semaphore.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include<netinet/in.h>
+
+#include<netdb.h>
+#include<arpa/inet.h>
+#include<unistd.h>
+#include<fcntl.h>
+#include<sys/wait.h>
+#include<errno.h>
+
+
 
 typedef struct cache_element cache_element;
 #define MAX_CLIENT 10
