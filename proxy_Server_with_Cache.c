@@ -145,4 +145,43 @@ int main(int argc, char * argv[])
 		perror("Error while Listening !\n");
 		exit(1);
 	}
+
+    // this store list of currently connected clients
+    
+    int i = 0; // Iterator for thread_id (tid) and Accepted Client_Socket for each thread
+	int Connected_socketId[MAX_CLIENTS];   // This array stores socket descriptors of connected clients
+
+       // Infinite Loop for accepting connections
+	while(1)
+	{
+		
+		bzero((char*)&client_addr, sizeof(client_addr));			// Clears struct client_addr
+		client_len = sizeof(client_addr); 
+
+        // Accepting the connections
+        // Below code try to acceept a new connection to proxy_socketId and once athe connection is established it create unique 
+        // it return socket descriptor which can be used to share data from server to cleint on another socket not prxysocketID
+		client_socketId = accept(proxy_socketId, (struct sockaddr*)&client_addr,(socklen_t*)&client_len);	// Accepts connection
+		if(client_socketId < 0)
+		{
+			fprintf(stderr, "Error in Accepting connection !\n");
+			exit(1);
+		}
+		else{
+			Connected_socketId[i] = client_socketId; // Storing accepted client into array
+		}
+
+		// Getting IP address and port number of client
+		struct sockaddr_in* client_pt = (struct sockaddr_in*)&client_addr;
+		struct in_addr ip_addr = client_pt->sin_addr;
+		char str[INET_ADDRSTRLEN];										// INET_ADDRSTRLEN: Default ip address size
+		inet_ntop( AF_INET, &ip_addr, str, INET_ADDRSTRLEN );
+		printf("Client is connected with port number: %d and ip address: %s \n",ntohs(client_addr.sin_port), str);
+		//printf("Socket values of index %d in main function is %d\n",i, client_socketId);
+		pthread_create(&tid[i],NULL,thread_fn, (void*)&Connected_socketId[i]); // Creating a thread for each client accepted
+		i++; 
+	}
+	close(proxy_socketId);									// Close socket
+ 	return 0;
+}
 }
