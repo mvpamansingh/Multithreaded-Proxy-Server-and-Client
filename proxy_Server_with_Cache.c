@@ -25,6 +25,10 @@
 typedef struct cache_element cache_element;
 #define MAX_CLIENT 10
 #define MAX_BYTES 4096
+#define MAX_SIZE 200*(1<<20)     //size of the cache
+#define MAX_ELEMENT_SIZE 10*(1<<20)     //max size of an element in cache
+
+
 struct cache_element
 {
     char* data;
@@ -693,4 +697,48 @@ cache_element* find(char* url){
     temp_lock_val = pthread_mutex_unlock(&lock);
 	printf("Remove Cache Lock Unlocked %d\n",temp_lock_val); 
     return site;
+}
+
+
+
+int add_cache_element(char* data,int size,char* url){
+    // Adds element to the cache
+	// sem_wait(&cache_lock);
+    int temp_lock_val = pthread_mutex_lock(&lock);
+	printf("Add Cache Lock Acquired %d\n", temp_lock_val);
+    int element_size=size+1+strlen(url)+sizeof(cache_element); // Size of the new element which will be added to the cache
+    if(element_size>MAX_ELEMENT_SIZE){
+		//sem_post(&cache_lock);
+        // If element size is greater than MAX_ELEMENT_SIZE we don't add the element to the cache
+        temp_lock_val = pthread_mutex_unlock(&lock);
+		printf("Add Cache Lock Unlocked %d\n", temp_lock_val);
+		// free(data);
+		// printf("--\n");
+		// free(url);
+        return 0;
+    }
+    else
+    {   while(cache_size+element_size>MAX_SIZE){
+            // We keep removing elements from cache until we get enough space to add the element
+            remove_cache_element();
+        }
+        cache_element* element = (cache_element*) malloc(sizeof(cache_element)); // Allocating memory for the new cache element
+        element->data= (char*)malloc(size+1); // Allocating memory for the response to be stored in the cache element
+		strcpy(element->data,data); 
+        element -> url = (char*)malloc(1+( strlen( url )*sizeof(char)  )); // Allocating memory for the request to be stored in the cache element (as a key)
+		strcpy( element -> url, url );
+		element->lru_time_track=time(NULL);    // Updating the time_track
+        element->next=head; 
+        element->len=size;
+        head=element;
+        cache_size+=element_size;
+        temp_lock_val = pthread_mutex_unlock(&lock);
+		printf("Add Cache Lock Unlocked %d\n", temp_lock_val);
+		//sem_post(&cache_lock);
+		// free(data);
+		// printf("--\n");
+		// free(url);
+        return 1;
+    }
+    return 0;
 }
