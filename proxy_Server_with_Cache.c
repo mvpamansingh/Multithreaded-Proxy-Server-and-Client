@@ -659,3 +659,38 @@ int checkHTTPversion(char *msg)
 
 	return version;
 }
+
+
+
+
+
+cache_element* find(char* url){
+
+// Checks for url in the cache if found returns pointer to the respective cache element or else returns NULL
+    cache_element* site=NULL;
+	//sem_wait(&cache_lock);
+    int temp_lock_val = pthread_mutex_lock(&lock);
+	printf("Remove Cache Lock Acquired %d\n",temp_lock_val); 
+    if(head!=NULL){
+        site = head;
+        while (site!=NULL)
+        {
+            if(!strcmp(site->url,url)){
+				printf("LRU Time Track Before : %ld", site->lru_time_track);
+                printf("\nurl found\n");
+				// Updating the time_track
+				site->lru_time_track = time(NULL);
+				printf("LRU Time Track After : %ld", site->lru_time_track);
+				break;
+            }
+            site=site->next;
+        }       
+    }
+	else {
+    printf("\nurl not found\n");
+	}
+	//sem_post(&cache_lock);
+    temp_lock_val = pthread_mutex_unlock(&lock);
+	printf("Remove Cache Lock Unlocked %d\n",temp_lock_val); 
+    return site;
+}
