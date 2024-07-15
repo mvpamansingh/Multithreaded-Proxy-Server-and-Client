@@ -24,7 +24,7 @@
 
 typedef struct cache_element cache_element;
 #define MAX_CLIENT 10
-
+#define MAX_BYTES 4096
 struct cache_element
 {
     char* data;
@@ -184,4 +184,217 @@ int main(int argc, char * argv[])
 	close(proxy_socketId);									// Close socket
  	return 0;
 }
+
+
+void* thread_fn(void* socketNew)
+{
+	// subtracts 1 from semaphore value and if it is negative it waits and if not it do further work
+	sem_wait(&seamaphore); 
+	int p;
+	// getting semaphore value in p to check 
+	sem_getvalue(&seamaphore,&p);
+	printf("semaphore value:%d\n",p);
+    int* t= (int*)(socketNew);
+	int socket=*t;           // Socket is socket descriptor of the connected Client
+	int bytes_send_client,len;	  // Bytes Transferred by cleint http req to server
+
+	
+	char *buffer = (char*)calloc(MAX_BYTES,sizeof(char));	// Creating buffer of 4kb for a client
+	
+	
+	bzero(buffer, MAX_BYTES);								// Making buffer zero
+
+	bytes_send_client = recv(socket, buffer, MAX_BYTES, 0); // Receiving the Request of client by proxy server and storing it in buffer and it also return no of bites transffered
+	
+	while(bytes_send_client > 0)
+	{
+		len = strlen(buffer);
+        //loop until u find "\r\n\r\n" in the buffer
+		if(strstr(buffer, "\r\n\r\n") == NULL)
+		{	
+			bytes_send_client = recv(socket, buffer + len, MAX_BYTES - len, 0);
+		}
+		else{
+			break;
+		}
+	}
+
+	// creating another buffer to store complete cleint request (http link)
+	char *tempReq = (char*)malloc(strlen(buffer)*sizeof(char)+10);
+
+    //tempReq, buffer both store the http request sent by client
+
+	for (int i = 0; i < strlen(buffer); i++)
+
+	{
+
+		tempReq[i] = buffer[i];
+
+	}
+
+	
+
+	//checking for the request in cache i.e   
+	//passing Url stored in temp req to find method to check wether the url exist in LRU cache 
+
+	struct cache_element* temp = find(tempReq);
+
+
+
+	if( temp != NULL){
+
+        //request found in cache, so sending the response to client from proxy's cache
+
+		int size=temp->len/sizeof(char);
+
+		int pos=0;
+
+		char response[MAX_BYTES];
+
+		while(pos<size){
+
+			bzero(response,MAX_BYTES);
+
+			// Url exist so sending data corresponding to   that url stored in cache , bit by bit
+			for(int i=0;i<MAX_BYTES;i++){
+
+				response[i]=temp->data[pos];
+
+				pos++;
+
+			}
+			// sending the request to client on respective socket
+			send(socket,response,MAX_BYTES,0);
+
+		}
+
+		printf("Data retrived from the Cache :  \n\n");
+
+		printf("%s\n\n",response);
+
+		//return NULL;
+
+	}
+
+	
+
+	
+
+	else if(bytes_send_client > 0)
+
+	{// this executes when url is not found in cache, we do a check if URL recueved from client >0
+	// then parse the http call to the WWW (google.co)
+		len = strlen(buffer); 
+
+		//Parsing the request
+
+		struct ParsedRequest* request = ParsedRequest_create();
+
+		
+
+        //ParsedRequest_parse returns 0 on success and -1 on failure.On success it stores parsed request in
+
+        // the request
+		
+		// passing the URL in buffer to 
+		if (ParsedRequest_parse(request, buffer, len) < 0) 
+
+		{
+
+		   	printf("Parsing failed\n");
+
+		}
+
+		else
+
+		{	
+
+			bzero(buffer, MAX_BYTES);
+
+			if(!strcmp(request->method,"GET"))							
+
+			{
+
+                
+
+				if( request->host && request->path && (checkHTTPversion(request->version) == 1) )
+
+				{
+
+					bytes_send_client = handle_request(socket, request, buffer, tempReq);		// Handle GET request
+
+					if(bytes_send_client == -1)
+
+					{	
+
+						sendErrorMessage(socket, 500);
+
+					}
+
+
+
+				}
+
+				else
+
+					sendErrorMessage(socket, 500);			// 500 Internal Error
+
+
+
+			}
+
+            else
+
+            {
+
+                printf("This code doesn't support any method other than GET\n");
+
+            }
+
+    
+
+		}
+
+        //freeing up the request pointer
+
+		ParsedRequest_destroy(request);
+
+
+
+	}
+
+	else if( bytes_send_client < 0)
+
+	{
+
+		perror("Error in receiving from client.\n");
+
+	}
+
+	else if(bytes_send_client == 0)
+
+	{
+
+		printf("Client disconnected!\n");
+
+	}
+
+
+
+	shutdown(socket, SHUT_RDWR);
+
+	close(socket);
+
+	free(buffer);
+
+	sem_post(&seamaphore);	
+
+	sem_getvalue(&seamaphore,&p);
+
+	printf("Semaphore post value:%d\n",p);
+
+	return NULL;
+
+
+
 }
